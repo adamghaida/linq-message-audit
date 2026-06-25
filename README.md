@@ -86,7 +86,9 @@ it fast:
   **Parallel** field (dashboard), up to 20.
 - **100-message pages** cut the number of round-trips per chat ~5×.
 - **Per-chat cap** bounds how deep very active chats are paged. Lower it if you only
-  care about quiet chats and want a faster scan.
+  care about quiet chats and want a faster scan. The dashboard's **Full history (≤5k)**
+  toggle pages every message per chat up to a 5,000 ceiling — complete totals, but
+  slower in proportion to your largest chats.
 
 ## Files
 

@@ -102,8 +102,9 @@
     </div>
     <div class="field">
       <label>Per-chat cap</label>
-      <input id="cap" type="number" min="1" value="300" />
+      <input id="cap" type="number" min="1" max="5000" value="300" />
     </div>
+    <label class="chk" title="Pull every message per chat, up to a 5,000 ceiling. Slower."><input id="fullHistory" type="checkbox" /> Full history (≤5k)</label>
     <div class="field">
       <label>Parallel</label>
       <input id="concurrency" type="number" min="1" max="20" value="12" />
@@ -192,9 +193,10 @@ function start(){
   $('phase').textContent='Loading chat list…'; $('dash').style.display='none';
   $('scan').disabled=true; $('stop').style.display='';
 
+  const FULL_CAP = 5000;
   const p=new URLSearchParams();
   if($('from').value.trim()) p.set('from',$('from').value.trim());
-  if($('cap').value) p.set('cap',$('cap').value);
+  p.set('cap', $('fullHistory').checked ? FULL_CAP : ($('cap').value || 300));
   if($('concurrency').value) p.set('concurrency',$('concurrency').value);
   if($('keyWrap').style.display!=='none' && $('key').value.trim()) p.set('key',$('key').value.trim());
 
@@ -315,6 +317,10 @@ function renderTable(){
 function renderAll(){ renderMetrics(); renderHealth(); renderHist(); renderTable(); }
 
 // ---------- events ----------
+$('fullHistory').addEventListener('change',(e)=>{
+  $('cap').disabled = e.target.checked;
+  $('cap').style.opacity = e.target.checked ? .4 : 1;
+});
 $('scan').onclick=start;
 $('stop').onclick=()=>{ finish(); $('phase').textContent+=' (stopped)'; renderAll(); };
 ['fUs','fTotal','fMode','fHealth','fSearch','fNever'].forEach(id=>{

@@ -77,7 +77,7 @@ async function handleScanAll(req, res, url) {
     return;
   }
   const from = url.searchParams.get('from')?.trim() || undefined;
-  const perChatCap = num(url.searchParams.get('cap')) ?? 300;
+  const perChatCap = Math.min(5000, Math.max(1, num(url.searchParams.get('cap')) ?? 300));
   const concurrency = Math.min(20, Math.max(1, num(url.searchParams.get('concurrency')) ?? 12));
 
   res.writeHead(200, {
