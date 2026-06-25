@@ -12,6 +12,7 @@
 //                 (aliases: --from-me, --mine)
 //   --from E164   Only scan chats on this line, e.g. --from +12025550100.
 //   --mode M      When both filters are set: "all" (AND, default) or "any" (OR).
+//   --concurrency N  How many chats to count in parallel (default 12).
 //
 // If neither --total nor --us is given, defaults to "--total 3".
 // Env equivalents: LINQ_API_KEY (required), FROM, THRESHOLD (=> --total).
@@ -30,6 +31,7 @@ function parseArgs(argv) {
       case '--mine': opts.us = Number(next()); break;
       case '--from': opts.from = next(); break;
       case '--mode': opts.mode = next(); break;
+      case '--concurrency': opts.concurrency = Number(next()); break;
       case '-h':
       case '--help': opts.help = true; break;
       default:
@@ -82,8 +84,9 @@ async function main() {
   const client = createClient(apiKey);
   const { scanned, flagged } = await scanChats({
     client, totalMax, usMax, mode: opts.mode, from,
-    onProgress: ({ scanned: s, flagged: f }) => {
-      if (s % 25 === 0) console.error(`  ...scanned ${s}, ${f} flagged`);
+    ...(Number.isFinite(opts.concurrency) ? { concurrency: opts.concurrency } : {}),
+    onProgress: ({ scanned: s, total, flagged: f }) => {
+      if (s % 25 === 0) console.error(`  ...scanned ${s}/${total}, ${f} flagged`);
     },
   });
 

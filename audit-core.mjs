@@ -2,9 +2,35 @@
 import LinqAPIV3 from '@linqapp/sdk';
 
 export const HARD_CAP = 500; // never page more than this many messages for one chat
+export const PAGE_LIMIT = 100; // request the largest page size to cut round-trips
+export const DEFAULT_CONCURRENCY = 12; // chats counted in parallel
 
 export function createClient(apiKey) {
   return new LinqAPIV3({ apiKey });
+}
+
+// Run `worker` over items with bounded concurrency, in input order-agnostic fashion.
+async function pool(items, concurrency, worker, isCancelled) {
+  let i = 0;
+  async function run() {
+    while (i < items.length) {
+      if (isCancelled?.()) return;
+      const idx = i++;
+      await worker(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
+}
+
+// Drain the paginated chat list into an array (fast: ~100 chats per request).
+async function listAllChats(client, from, isCancelled) {
+  const out = [];
+  const params = from ? { from, limit: PAGE_LIMIT } : { limit: PAGE_LIMIT };
+  for await (const chat of client.chats.listChats(params)) {
+    if (isCancelled?.()) break;
+    out.push(chat);
+  }
+  return out;
 }
 
 export function describeChat(chat) {
@@ -34,7 +60,7 @@ function canStillPass(total, us, { totalMax, usMax, mode }) {
 async function countChat(client, chatId, opts, isCancelled) {
   let total = 0;
   let us = 0;
-  for await (const message of client.chats.messages.list(chatId)) {
+  for await (const message of client.chats.messages.list(chatId, { limit: PAGE_LIMIT })) {
     if (isCancelled?.()) return { total, us, exhaustive: false };
     total += 1;
     if (message.is_from_me) us += 1;
@@ -64,15 +90,16 @@ export function filterSummary({ totalMax, usMax, mode }) {
  * @param {(f:object)=>void} [a.onFlag] called when a chat matches
  * @param {()=>boolean} [a.isCancelled]
  */
-export async function scanChats({ client, totalMax, usMax, mode = 'all', from, onProgress, onFlag, isCancelled }) {
+export async function scanChats({
+  client, totalMax, usMax, mode = 'all', from,
+  concurrency = DEFAULT_CONCURRENCY, onProgress, onFlag, isCancelled,
+}) {
   const opts = { totalMax, usMax, mode };
   const flagged = [];
   let scanned = 0;
 
-  const listParams = from ? { from } : undefined;
-  for await (const chat of client.chats.listChats(listParams)) {
-    if (isCancelled?.()) break;
-    scanned += 1;
+  const list = await listAllChats(client, from, isCancelled);
+  await pool(list, concurrency, async (chat) => {
     const { total, us, exhaustive } = await countChat(client, chat.id, opts, isCancelled);
     if (exhaustive && passes(total, us, opts)) {
       const row = {
@@ -85,8 +112,9 @@ export async function scanChats({ client, totalMax, usMax, mode = 'all', from, o
       flagged.push(row);
       onFlag?.(row);
     }
-    onProgress?.({ scanned, flagged: flagged.length });
-  }
+    scanned += 1;
+    onProgress?.({ scanned, total: list.length, flagged: flagged.length });
+  }, isCancelled);
 
   flagged.sort((a, b) => a.us - b.us || a.total - b.total);
   return { scanned, flagged, cancelled: isCancelled?.() ?? false };
@@ -97,7 +125,7 @@ async function countChatFull(client, chatId, cap, isCancelled) {
   let total = 0;
   let us = 0;
   let lastActivity = null; // newest message timestamp seen
-  for await (const message of client.chats.messages.list(chatId)) {
+  for await (const message of client.chats.messages.list(chatId, { limit: PAGE_LIMIT })) {
     if (isCancelled?.()) return { total, us, lastActivity, capped: true };
     total += 1;
     if (message.is_from_me) us += 1;
@@ -110,21 +138,29 @@ async function countChatFull(client, chatId, cap, isCancelled) {
 
 /**
  * Collect full stats for every chat (for the dashboard). Streams each chat via onChat.
+ *
+ * The chat list is drained first (so `onTotal` reports the real count and the progress
+ * bar is accurate), then chats are counted with bounded concurrency.
  * @param {object} a
  * @param {LinqAPIV3} a.client
  * @param {string} [a.from]            E.164 line filter
  * @param {number} [a.perChatCap=300]  stop counting a chat after this many messages
+ * @param {number} [a.concurrency=8]   chats counted in parallel
+ * @param {(total:number)=>void} [a.onTotal]  called once with the chat count
  * @param {(chat:object)=>void} [a.onChat]
- * @param {(p:{scanned:number})=>void} [a.onProgress]
+ * @param {(p:{scanned:number,total:number})=>void} [a.onProgress]
  * @param {()=>boolean} [a.isCancelled]
  */
-export async function scanAllChats({ client, from, perChatCap = 300, onChat, onProgress, isCancelled }) {
+export async function scanAllChats({
+  client, from, perChatCap = 300, concurrency = DEFAULT_CONCURRENCY,
+  onTotal, onChat, onProgress, isCancelled,
+}) {
+  const list = await listAllChats(client, from, isCancelled);
+  onTotal?.(list.length);
+
   const chats = [];
   let scanned = 0;
-  const listParams = from ? { from } : undefined;
-  for await (const chat of client.chats.listChats(listParams)) {
-    if (isCancelled?.()) break;
-    scanned += 1;
+  await pool(list, concurrency, async (chat) => {
     const { total, us, lastActivity, capped } = await countChatFull(client, chat.id, perChatCap, isCancelled);
     const row = {
       id: chat.id,
@@ -141,8 +177,10 @@ export async function scanAllChats({ client, from, perChatCap = 300, onChat, onP
       lastActivity: lastActivity ?? chat.updated_at ?? null,
     };
     chats.push(row);
+    scanned += 1;
     onChat?.(row);
-    onProgress?.({ scanned });
-  }
+    onProgress?.({ scanned, total: list.length });
+  }, isCancelled);
+
   return { scanned, chats, cancelled: isCancelled?.() ?? false };
 }

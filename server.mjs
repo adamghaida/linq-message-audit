@@ -78,6 +78,7 @@ async function handleScanAll(req, res, url) {
   }
   const from = url.searchParams.get('from')?.trim() || undefined;
   const perChatCap = num(url.searchParams.get('cap')) ?? 300;
+  const concurrency = Math.min(20, Math.max(1, num(url.searchParams.get('concurrency')) ?? 12));
 
   res.writeHead(200, {
     'content-type': 'text/event-stream',
@@ -88,12 +89,13 @@ async function handleScanAll(req, res, url) {
   let cancelled = false;
   req.on('close', () => { cancelled = true; });
 
-  sse(res, 'start', { from: from ?? null, cap: perChatCap });
+  sse(res, 'start', { from: from ?? null, cap: perChatCap, concurrency });
   try {
     const { scanned } = await scanAllChats({
       client: createClient(apiKey),
-      from, perChatCap,
+      from, perChatCap, concurrency,
       isCancelled: () => cancelled,
+      onTotal: (total) => sse(res, 'total', { total }),
       onChat: (row) => sse(res, 'chat', row),
       onProgress: (p) => sse(res, 'progress', p),
     });

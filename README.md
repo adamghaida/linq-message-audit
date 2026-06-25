@@ -67,11 +67,26 @@ us=1 total=8  6f4c4fae-…  someone@example.com  [HEALTHY]
 
 ## How it works
 
-- `client.chats.listChats()` pages through every chat for the partner key.
-- For each chat, `client.chats.messages.list(chatId)` is paged only until the chat can
-  no longer match (counts only grow, so a `< threshold` condition never recovers once
-  broken), and never past a hard cap of 500 messages. Busy chats are skipped cheaply.
-- A chat is reported only when its count is **exhaustive** (we know the true totals).
+- `client.chats.listChats()` pages through every chat for the partner key (100 per
+  request). The list is drained first so the progress bar is accurate.
+- Each chat is counted by paging `client.chats.messages.list(chatId)` (100 per request).
+  The threshold CLI scan stops early once a chat can no longer match; the dashboard
+  counts up to a per-chat cap.
+- Chats are counted **in parallel** (default 12 at a time), which is where most of the
+  speed comes from.
+
+## Performance
+
+There is no message-count field on the API, so counts require listing messages, and
+each Linq request is ~300–600 ms. The cost is therefore (requests × latency). To keep
+it fast:
+
+- **Parallelism** is the big lever — counting chats concurrently took a full ~760-chat
+  account from ~2 min down to ~20–40 s. Tune with `--concurrency` (CLI) or the
+  **Parallel** field (dashboard), up to 20.
+- **100-message pages** cut the number of round-trips per chat ~5×.
+- **Per-chat cap** bounds how deep very active chats are paged. Lower it if you only
+  care about quiet chats and want a faster scan.
 
 ## Files
 
