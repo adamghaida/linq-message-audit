@@ -3,214 +3,328 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Linq Message Audit</title>
+<title>Linq Message Audit — Dashboard</title>
 <style>
   :root {
-    --bg: #0c0f17; --panel: #141925; --panel2: #1b2233; --line: #283047;
-    --text: #e8ecf5; --muted: #8b95ad; --accent: #5b8cff; --good: #46c08a;
-    --warn: #e6b450; --bad: #ef6b6b;
+    --bg:#0c0f17; --panel:#141925; --panel2:#1b2233; --line:#283047;
+    --text:#e8ecf5; --muted:#8b95ad; --accent:#5b8cff;
+    --good:#46c08a; --warn:#e6b450; --bad:#ef6b6b; --them:#6f7bdc;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
-  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.2px; }
-  .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-  label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 6px; }
-  input, select {
-    width: 100%; background: var(--panel2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 9px; padding: 10px 12px; font-size: 14px; outline: none;
-  }
-  input:focus, select:focus { border-color: var(--accent); }
-  .hint { color: var(--muted); font-size: 12px; margin-top: 5px; }
-  .row { display: flex; gap: 12px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
-  button {
-    background: var(--accent); color: #fff; border: 0; border-radius: 9px;
-    padding: 11px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
-  }
-  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
-  button:disabled { opacity: .5; cursor: default; }
-  .status { display: flex; gap: 18px; align-items: center; margin: 22px 0 10px; flex-wrap: wrap; min-height: 22px; }
-  .pill { font-size: 13px; color: var(--muted); }
-  .pill b { color: var(--text); }
-  .bar { height: 6px; background: var(--panel2); border-radius: 99px; overflow: hidden; flex: 1; min-width: 120px; }
-  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-  .err { color: var(--bad); font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13.5px; }
-  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; position: sticky; top: 0; background: var(--panel); }
-  td.num { font-variant-numeric: tabular-nums; }
-  td.id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
-  .tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); }
-  .HEALTHY { color: var(--good); border-color: rgba(70,192,138,.4); }
-  .AT_RISK { color: var(--warn); border-color: rgba(230,180,80,.4); }
-  .CRITICAL, .OPTED_OUT { color: var(--bad); border-color: rgba(239,107,107,.4); }
-  .zero { color: var(--bad); font-weight: 700; }
-  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font:14.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1180px; margin:0 auto; padding:28px 20px 80px; }
+  h1 { font-size:21px; margin:0; letter-spacing:-.2px; }
+  .sub { color:var(--muted); font-size:13.5px; margin:2px 0 0; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+
+  /* top control bar */
+  .topbar { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; margin:20px 0 8px; }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  label { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+  input,select { background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:9px; padding:9px 11px; font-size:14px; outline:none; }
+  input:focus,select:focus { border-color:var(--accent); }
+  input[type=number]{ width:96px; } input.line{ width:150px; } input.search{ width:200px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:9px;
+    padding:10px 18px; font-size:14px; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+  button:disabled { opacity:.5; cursor:default; }
+
+  .statusline { display:flex; gap:16px; align-items:center; margin:10px 0 4px; flex-wrap:wrap; min-height:20px; }
+  .pill { font-size:13px; color:var(--muted); } .pill b { color:var(--text); }
+  .bar { height:6px; background:var(--panel2); border-radius:99px; overflow:hidden; flex:1; min-width:120px; }
+  .bar > i { display:block; height:100%; width:0; background:var(--accent); transition:width .2s; }
+  .err { color:var(--bad); font-size:14px; min-height:18px; }
+
+  /* metric cards */
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:14px 0; }
+  .metric .v { font-size:26px; font-weight:700; letter-spacing:-.5px; }
+  .metric .k { color:var(--muted); font-size:12px; margin-top:2px; }
+  .metric .v.good{color:var(--good);} .metric .v.bad{color:var(--bad);} .metric .v.warn{color:var(--warn);}
+
+  .panels { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+  @media(max-width:760px){ .panels{ grid-template-columns:1fr; } }
+  .panel h3 { margin:0 0 12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  /* health stacked bar */
+  .stack { display:flex; height:26px; border-radius:7px; overflow:hidden; background:var(--panel2); }
+  .stack > span { display:flex; align-items:center; justify-content:center; font-size:11px; color:#0c0f17; font-weight:700; min-width:0; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:12.5px; color:var(--muted); }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:middle; }
+  .seg-HEALTHY{background:var(--good);} .seg-AT_RISK{background:var(--warn);}
+  .seg-CRITICAL{background:var(--bad);} .seg-OPTED_OUT{background:#9aa3bd;} .seg-none{background:#3a435e;}
+  /* histogram */
+  .hist { display:flex; align-items:flex-end; gap:8px; height:130px; }
+  .hist .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; }
+  .hist .col > .b { width:100%; background:var(--accent); border-radius:6px 6px 0 0; min-height:2px; }
+  .hist .col.z > .b { background:var(--bad); }
+  .hist .n { font-size:12px; font-variant-numeric:tabular-nums; }
+  .hist .x { font-size:11px; color:var(--muted); }
+
+  /* filters */
+  .filters { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin:8px 0 6px; }
+  .chk { display:flex; align-items:center; gap:7px; font-size:13px; color:var(--text); padding-bottom:9px; }
+  .chk input{ width:auto; }
+
+  table { width:100%; border-collapse:collapse; margin-top:6px; font-size:13.5px; }
+  th,td { text-align:left; padding:8px 11px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; cursor:pointer; user-select:none;
+    position:sticky; top:0; background:var(--panel); }
+  th.sorted::after { content:' \25BE'; } th.sorted.asc::after { content:' \25B4'; }
+  td.num { font-variant-numeric:tabular-nums; } td.name{ white-space:normal; }
+  td.id { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:var(--muted); }
+  .tag { font-size:11px; padding:2px 8px; border-radius:99px; border:1px solid var(--line); }
+  .HEALTHY{color:var(--good);border-color:rgba(70,192,138,.4);}
+  .AT_RISK{color:var(--warn);border-color:rgba(230,180,80,.4);}
+  .CRITICAL,.OPTED_OUT{color:var(--bad);border-color:rgba(239,107,107,.4);}
+  .zero{ color:var(--bad); font-weight:700; }
+  .cap{ color:var(--warn); font-size:11px; } .empty{ color:var(--muted); padding:22px 0; text-align:center; }
+  .tablewrap{ max-height:560px; overflow:auto; border:1px solid var(--line); border-radius:12px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Linq Message Audit</h1>
-  <p class="sub">Find chats with very few messages — overall or specifically from us.</p>
-
-  <div class="card">
-    <div class="grid">
-      <div id="keyWrap" style="display:none; grid-column: 1 / -1;">
-        <label>Linq API key</label>
-        <input id="key" type="password" placeholder="linq_..." autocomplete="off" />
-        <div class="hint">No key found in the server environment — paste one to scan.</div>
-      </div>
-      <div>
-        <label>Fewer than … from us</label>
-        <input id="us" type="number" min="0" placeholder="4" value="4" />
-        <div class="hint">messages where is_from_me</div>
-      </div>
-      <div>
-        <label>Fewer than … total</label>
-        <input id="total" type="number" min="0" placeholder="any" />
-        <div class="hint">leave blank to ignore</div>
-      </div>
-      <div>
-        <label>Combine</label>
-        <select id="mode">
-          <option value="all">Match all (AND)</option>
-          <option value="any">Match any (OR)</option>
-        </select>
-      </div>
-      <div>
-        <label>From line (optional)</label>
-        <input id="from" type="text" placeholder="+12025550100" />
-        <div class="hint">scope to one number</div>
-      </div>
-    </div>
-    <div class="row">
-      <button id="scan">Scan chats</button>
-      <button id="stop" class="ghost" style="display:none;">Stop</button>
-      <button id="csv" class="ghost" disabled>Download CSV</button>
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;">
+    <div>
+      <h1>Linq Message Audit</h1>
+      <p class="sub">Scan every chat once, then slice the results — message volume, who sent what, and chat health.</p>
     </div>
   </div>
 
-  <div class="status">
-    <span class="pill" id="summary"></span>
+  <div class="card topbar">
+    <div class="field" id="keyWrap" style="display:none;">
+      <label>Linq API key</label>
+      <input id="key" class="line" type="password" placeholder="linq_..." autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>From line (optional)</label>
+      <input id="from" class="line" type="text" placeholder="+12025550100" />
+    </div>
+    <div class="field">
+      <label>Per-chat cap</label>
+      <input id="cap" type="number" min="1" value="300" />
+    </div>
+    <button id="scan">Scan all chats</button>
+    <button id="stop" class="ghost" style="display:none;">Stop</button>
+  </div>
+
+  <div class="statusline">
     <div class="bar"><i id="bar"></i></div>
-    <span class="pill"><b id="scanned">0</b> scanned</span>
-    <span class="pill"><b id="count">0</b> flagged</span>
+    <span class="pill" id="phase">Idle</span>
   </div>
   <div class="err" id="error"></div>
 
-  <table id="tbl" style="display:none;">
-    <thead><tr><th>From us</th><th>Total</th><th>Chat</th><th>ID</th><th>Health</th></tr></thead>
-    <tbody id="rows"></tbody>
-  </table>
-  <div class="empty" id="empty" style="display:none;">No matching chats.</div>
+  <div id="dash" style="display:none;">
+    <div class="metrics" id="metrics"></div>
+
+    <div class="panels">
+      <div class="card panel">
+        <h3>Chat health</h3>
+        <div class="stack" id="healthStack"></div>
+        <div class="legend" id="healthLegend"></div>
+      </div>
+      <div class="card panel">
+        <h3>Messages from us — distribution</h3>
+        <div class="hist" id="hist"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="filters">
+        <div class="field"><label>From us &lt;</label><input id="fUs" type="number" min="0" placeholder="any" value="4" /></div>
+        <div class="field"><label>Total &lt;</label><input id="fTotal" type="number" min="0" placeholder="any" /></div>
+        <div class="field"><label>Combine</label>
+          <select id="fMode"><option value="all">AND</option><option value="any">OR</option></select>
+        </div>
+        <div class="field"><label>Health</label>
+          <select id="fHealth">
+            <option value="">All</option>
+            <option>HEALTHY</option><option>AT_RISK</option><option>CRITICAL</option><option>OPTED_OUT</option>
+          </select>
+        </div>
+        <div class="field"><label>Search name / id</label><input id="fSearch" class="search" type="text" placeholder="phone, email…" /></div>
+        <label class="chk"><input id="fNever" type="checkbox" /> Never replied (us = 0)</label>
+        <div style="flex:1"></div>
+        <span class="pill" style="padding-bottom:9px;"><b id="matchCount">0</b> shown</span>
+        <button id="csv" class="ghost" disabled>CSV</button>
+      </div>
+      <div class="tablewrap">
+        <table id="tbl">
+          <thead><tr>
+            <th data-k="us">From us</th><th data-k="them">From them</th><th data-k="total">Total</th>
+            <th data-k="name">Chat</th><th data-k="health">Health</th><th data-k="lastActivity">Last activity</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" style="display:none;">No chats match the filters.</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let es = null, rows = [];
+let es = null, chats = [], scanning = false;
+let sortKey = 'us', sortDir = 1; // 1 asc, -1 desc
+let renderTimer = null;
 
-async function init() {
-  const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
-  if (!cfg.hasEnvKey) $('keyWrap').style.display = 'block';
+const HB = ['HEALTHY','AT_RISK','CRITICAL','OPTED_OUT'];
+
+async function init(){
+  const cfg = await fetch('/api/config').then(r=>r.json()).catch(()=>({}));
+  if(!cfg.hasEnvKey) $('keyWrap').style.display='';
 }
 init();
 
-function healthTag(h) {
-  if (!h) return '<span class="tag">—</span>';
-  return `<span class="tag ${h}">${h}</span>`;
-}
+const esc = (s)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtNum = (n)=>n.toLocaleString();
+function fmtDate(s){ if(!s) return '—'; const d=new Date(s); if(isNaN(d)) return '—';
+  return d.toISOString().slice(0,10); }
 
-function addRow(r) {
-  rows.push(r);
-  $('tbl').style.display = '';
-  $('empty').style.display = 'none';
-  const tr = document.createElement('tr');
-  tr.innerHTML =
-    `<td class="num ${r.us === 0 ? 'zero' : ''}">${r.us}</td>` +
-    `<td class="num">${r.total}</td>` +
-    `<td>${escapeHtml(r.name)}</td>` +
-    `<td class="id">${r.id}</td>` +
-    `<td>${healthTag(r.health)}</td>`;
-  $('rows').appendChild(tr);
-}
+function start(){
+  if(es) es.close();
+  chats=[]; scanning=true;
+  $('error').textContent=''; $('bar').style.width='0';
+  $('phase').textContent='Scanning…'; $('dash').style.display='none';
+  $('scan').disabled=true; $('stop').style.display='';
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
-}
+  const p=new URLSearchParams();
+  if($('from').value.trim()) p.set('from',$('from').value.trim());
+  if($('cap').value) p.set('cap',$('cap').value);
+  if($('keyWrap').style.display!=='none' && $('key').value.trim()) p.set('key',$('key').value.trim());
 
-function setScanning(on) {
-  $('scan').disabled = on;
-  $('stop').style.display = on ? '' : 'none';
-}
-
-function start() {
-  if (es) es.close();
-  rows = [];
-  $('rows').innerHTML = '';
-  $('tbl').style.display = 'none';
-  $('empty').style.display = 'none';
-  $('error').textContent = '';
-  $('scanned').textContent = '0';
-  $('count').textContent = '0';
-  $('bar').style.width = '0';
-  $('csv').disabled = true;
-
-  const p = new URLSearchParams();
-  if ($('us').value !== '') p.set('us', $('us').value);
-  if ($('total').value !== '') p.set('total', $('total').value);
-  p.set('mode', $('mode').value);
-  if ($('from').value.trim()) p.set('from', $('from').value.trim());
-  if ($('keyWrap').style.display !== 'none' && $('key').value.trim()) p.set('key', $('key').value.trim());
-
-  setScanning(true);
-  es = new EventSource('/api/scan?' + p.toString());
-
-  es.addEventListener('start', (e) => {
-    $('summary').textContent = 'Flagging: ' + JSON.parse(e.data).summary;
+  es=new EventSource('/api/scan-all?'+p.toString());
+  es.addEventListener('chat',(e)=>{ chats.push(JSON.parse(e.data)); scheduleRender(); });
+  es.addEventListener('progress',(e)=>{
+    const d=JSON.parse(e.data);
+    $('phase').textContent=`Scanning… ${d.scanned} chats`;
+    $('bar').style.width=Math.min(95, d.scanned/8)+'%';
   });
-  es.addEventListener('progress', (e) => {
-    const d = JSON.parse(e.data);
-    $('scanned').textContent = d.scanned;
-    $('count').textContent = d.flagged;
-    // we don't know the total chat count up front; show an indeterminate-ish creep
-    $('bar').style.width = Math.min(95, d.scanned / 8) + '%';
+  es.addEventListener('done',(e)=>{
+    const d=JSON.parse(e.data);
+    $('bar').style.width='100%';
+    $('phase').textContent=`Done — scanned ${d.scanned} chats`;
+    finish(); renderAll();
   });
-  es.addEventListener('flag', (e) => addRow(JSON.parse(e.data)));
-  es.addEventListener('done', (e) => {
-    const d = JSON.parse(e.data);
-    $('bar').style.width = '100%';
-    $('summary').textContent = `Done — scanned ${d.scanned}, ${d.flagged} match [${d.summary}]`;
-    if (rows.length === 0) $('empty').style.display = 'block';
-    $('csv').disabled = rows.length === 0;
-    finish();
-  });
-  es.addEventListener('error', (e) => {
-    let msg = 'Connection lost.';
-    try { msg = JSON.parse(e.data).message; } catch {}
-    $('error').textContent = 'Error: ' + msg;
-    finish();
+  es.addEventListener('error',(e)=>{
+    let m='Connection lost.'; try{ m=JSON.parse(e.data).message; }catch{}
+    $('error').textContent='Error: '+m; finish();
   });
 }
+function finish(){ scanning=false; $('scan').disabled=false; $('stop').style.display='none'; if(es){es.close();es=null;} }
+function scheduleRender(){ $('dash').style.display=''; if(renderTimer) return;
+  renderTimer=setTimeout(()=>{ renderTimer=null; renderAll(); }, 400); }
 
-function finish() { setScanning(false); if (es) { es.close(); es = null; } }
+// ---------- derived metrics ----------
+function metrics(){
+  const n=chats.length;
+  const totalMsgs=chats.reduce((a,c)=>a+c.total,0);
+  const us=chats.reduce((a,c)=>a+c.us,0);
+  const them=totalMsgs-us;
+  const never=chats.filter(c=>c.us===0).length;
+  const capped=chats.filter(c=>c.capped).length;
+  const replied = n? Math.round((n-never)/n*100):0;
+  return {n,totalMsgs,us,them,never,capped,replied,avg:n?(totalMsgs/n):0};
+}
+function renderMetrics(){
+  const m=metrics();
+  const cards=[
+    ['Chats', fmtNum(m.n), ''],
+    ['Total messages', fmtNum(m.totalMsgs), ''],
+    ['From us', fmtNum(m.us), ''],
+    ['From them', fmtNum(m.them), ''],
+    ['Never replied', fmtNum(m.never), m.never? 'bad':'good'],
+    ['Reply rate', m.replied+'%', m.replied>=80?'good':m.replied>=50?'warn':'bad'],
+    ['Avg msgs / chat', m.avg.toFixed(1), ''],
+  ];
+  if(m.capped) cards.push(['Capped chats', fmtNum(m.capped), 'warn']);
+  $('metrics').innerHTML=cards.map(([k,v,cls])=>
+    `<div class="card metric"><div class="v ${cls}">${v}</div><div class="k">${k}</div></div>`).join('');
+}
+function renderHealth(){
+  const counts={HEALTHY:0,AT_RISK:0,CRITICAL:0,OPTED_OUT:0,none:0};
+  chats.forEach(c=>{ counts[c.health??'none']=(counts[c.health??'none']||0)+1; });
+  const total=chats.length||1;
+  const order=[...HB,'none'];
+  $('healthStack').innerHTML=order.map(k=>{
+    const v=counts[k]||0; if(!v) return '';
+    const pct=v/total*100;
+    return `<span class="seg-${k}" style="width:${pct}%" title="${k}: ${v}">${pct>7?v:''}</span>`;
+  }).join('');
+  $('healthLegend').innerHTML=order.filter(k=>counts[k]).map(k=>
+    `<span><i class="seg-${k}"></i>${k==='none'?'Unknown':k} — ${counts[k]}</span>`).join('');
+}
+function renderHist(){
+  const buckets=[['0',c=>c.us===0],['1',c=>c.us===1],['2',c=>c.us===2],['3',c=>c.us===3],
+    ['4',c=>c.us===4],['5–9',c=>c.us>=5&&c.us<=9],['10+',c=>c.us>=10]];
+  const vals=buckets.map(([lab,f])=>[lab,chats.filter(f).length]);
+  const max=Math.max(1,...vals.map(v=>v[1]));
+  $('hist').innerHTML=vals.map(([lab,v],i)=>
+    `<div class="col ${i===0?'z':''}"><div class="n">${v}</div>`+
+    `<div class="b" style="height:${v/max*100}%"></div><div class="x">${lab}</div></div>`).join('');
+}
 
-$('scan').onclick = start;
-$('stop').onclick = () => { finish(); $('summary').textContent += ' (stopped)'; };
-$('csv').onclick = () => {
-  const head = 'from_us,total,name,chat_id,health\n';
-  const body = rows.map(r =>
-    [r.us, r.total, `"${String(r.name).replace(/"/g,'""')}"`, r.id, r.health ?? ''].join(',')
-  ).join('\n');
-  const blob = new Blob([head + body], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'linq-audit.csv';
-  a.click();
+// ---------- filtered table ----------
+function num(v){ if(v===''||v==null) return null; const n=Number(v); return Number.isFinite(n)?n:null; }
+function filtered(){
+  const fUs=num($('fUs').value), fTotal=num($('fTotal').value), mode=$('fMode').value;
+  const fH=$('fHealth').value, q=$('fSearch').value.trim().toLowerCase(), never=$('fNever').checked;
+  let rows=chats.filter(c=>{
+    if(never && c.us!==0) return false;
+    if(fH && (c.health??'')!==fH) return false;
+    if(q && !(c.name.toLowerCase().includes(q) || c.id.includes(q))) return false;
+    const usOk = fUs==null? null : c.us<fUs;
+    const tOk  = fTotal==null? null : c.total<fTotal;
+    const active=[usOk,tOk].filter(x=>x!==null);
+    if(active.length){ if(mode==='any'? !active.some(Boolean) : !active.every(Boolean)) return false; }
+    return true;
+  });
+  rows.sort((a,b)=>{
+    let x=a[sortKey], y=b[sortKey];
+    if(sortKey==='name'){ x=String(x).toLowerCase(); y=String(y).toLowerCase(); }
+    if(sortKey==='health'){ x=HB.indexOf(a.health); y=HB.indexOf(b.health); }
+    if(sortKey==='lastActivity'){ x=a.lastActivity||''; y=b.lastActivity||''; }
+    return (x<y?-1:x>y?1:0)*sortDir;
+  });
+  return rows;
+}
+function tag(h){ return h? `<span class="tag ${h}">${h}</span>` : '<span class="tag">—</span>'; }
+function renderTable(){
+  const rows=filtered();
+  $('matchCount').textContent=fmtNum(rows.length);
+  $('csv').disabled=rows.length===0;
+  $('empty').style.display=rows.length?'none':'';
+  $('rows').innerHTML=rows.slice(0,1000).map(c=>
+    `<tr><td class="num ${c.us===0?'zero':''}">${c.us}</td>`+
+    `<td class="num" style="color:var(--them)">${c.them}</td>`+
+    `<td class="num">${c.total}${c.capped?' <span class="cap">cap</span>':''}</td>`+
+    `<td class="name">${esc(c.name)}<br><span class="id">${c.id}</span></td>`+
+    `<td>${tag(c.health)}</td><td class="num">${fmtDate(c.lastActivity)}</td></tr>`).join('');
+  document.querySelectorAll('th').forEach(th=>{
+    th.classList.toggle('sorted', th.dataset.k===sortKey);
+    th.classList.toggle('asc', th.dataset.k===sortKey && sortDir===1);
+  });
+}
+function renderAll(){ renderMetrics(); renderHealth(); renderHist(); renderTable(); }
+
+// ---------- events ----------
+$('scan').onclick=start;
+$('stop').onclick=()=>{ finish(); $('phase').textContent+=' (stopped)'; renderAll(); };
+['fUs','fTotal','fMode','fHealth','fSearch','fNever'].forEach(id=>{
+  $(id).addEventListener('input', renderTable);
+});
+document.querySelectorAll('th').forEach(th=>th.addEventListener('click',()=>{
+  const k=th.dataset.k;
+  if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir = (k==='name')?1:1; }
+  renderTable();
+}));
+$('csv').onclick=()=>{
+  const rows=filtered();
+  const head='from_us,from_them,total,capped,name,chat_id,health,last_activity\n';
+  const body=rows.map(c=>[c.us,c.them,c.total,c.capped,`"${String(c.name).replace(/"/g,'""')}"`,c.id,c.health??'',c.lastActivity??''].join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));
+  a.download='linq-audit.csv'; a.click();
 };
 </script>
 </body>

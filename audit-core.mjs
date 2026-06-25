@@ -91,3 +91,58 @@ export async function scanChats({ client, totalMax, usMax, mode = 'all', from, o
   flagged.sort((a, b) => a.us - b.us || a.total - b.total);
   return { scanned, flagged, cancelled: isCancelled?.() ?? false };
 }
+
+// Count every message in a chat (no early exit), up to `cap`.
+async function countChatFull(client, chatId, cap, isCancelled) {
+  let total = 0;
+  let us = 0;
+  let lastActivity = null; // newest message timestamp seen
+  for await (const message of client.chats.messages.list(chatId)) {
+    if (isCancelled?.()) return { total, us, lastActivity, capped: true };
+    total += 1;
+    if (message.is_from_me) us += 1;
+    const ts = message.created_at ?? message.sent_at;
+    if (ts && (!lastActivity || ts > lastActivity)) lastActivity = ts;
+    if (total >= cap) return { total, us, lastActivity, capped: true };
+  }
+  return { total, us, lastActivity, capped: false };
+}
+
+/**
+ * Collect full stats for every chat (for the dashboard). Streams each chat via onChat.
+ * @param {object} a
+ * @param {LinqAPIV3} a.client
+ * @param {string} [a.from]            E.164 line filter
+ * @param {number} [a.perChatCap=300]  stop counting a chat after this many messages
+ * @param {(chat:object)=>void} [a.onChat]
+ * @param {(p:{scanned:number})=>void} [a.onProgress]
+ * @param {()=>boolean} [a.isCancelled]
+ */
+export async function scanAllChats({ client, from, perChatCap = 300, onChat, onProgress, isCancelled }) {
+  const chats = [];
+  let scanned = 0;
+  const listParams = from ? { from } : undefined;
+  for await (const chat of client.chats.listChats(listParams)) {
+    if (isCancelled?.()) break;
+    scanned += 1;
+    const { total, us, lastActivity, capped } = await countChatFull(client, chat.id, perChatCap, isCancelled);
+    const row = {
+      id: chat.id,
+      name: describeChat(chat),
+      total,
+      us,
+      them: total - us,
+      capped,
+      health: chat.health_status?.status ?? null,
+      isGroup: Boolean(chat.is_group),
+      service: chat.service ?? null,
+      updatedAt: chat.updated_at ?? null,
+      createdAt: chat.created_at ?? null,
+      lastActivity: lastActivity ?? chat.updated_at ?? null,
+    };
+    chats.push(row);
+    onChat?.(row);
+    onProgress?.({ scanned });
+  }
+  return { scanned, chats, cancelled: isCancelled?.() ?? false };
+}

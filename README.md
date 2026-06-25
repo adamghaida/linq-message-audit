@@ -21,18 +21,25 @@ export LINQ_API_KEY=linq_...   # your Linq partner key
 The API key is only ever read from the environment, server-side. It is never written
 to disk or sent to the browser.
 
-## Web UI
+## Dashboard (web UI)
 
 ```bash
 npm run serve            # → http://localhost:4178
 ```
 
-- Set **fewer-than-from-us** and/or **fewer-than-total** thresholds, choose AND/OR,
-  optionally scope to one line.
-- **Scan** streams live progress and fills the results table in real time
-  (Server-Sent Events).
-- Results show `from us`, `total`, chat name, ID, and health status. **Download CSV**
-  exports them.
+Scan every chat **once** (live progress streamed over Server-Sent Events), then slice
+the data in the browser without re-scanning:
+
+- **Metric cards** — total chats, total messages, from us vs. from them, never-replied
+  count, reply rate, average messages per chat.
+- **Chat health** — stacked breakdown of HEALTHY / AT_RISK / CRITICAL / OPTED_OUT.
+- **From-us distribution** — histogram bucketed by how many messages you sent (0–10+).
+- **Interactive table** — filter by `from us <`, `total <` (AND/OR), health, free-text
+  search, or "never replied"; sort any column; counts that hit the per-chat cap are
+  marked. **CSV** exports the current filtered view.
+
+The per-chat cap (default 300) bounds how deep each chat is paged so very active chats
+don't make a scan crawl; capped chats are flagged in the table.
 
 ## CLI
 

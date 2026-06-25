@@ -8,7 +8,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { createClient, scanChats, filterSummary } from './audit-core.mjs';
+import { createClient, scanChats, scanAllChats, filterSummary } from './audit-core.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4178);
@@ -69,9 +69,45 @@ async function handleScan(req, res, url) {
   res.end();
 }
 
+async function handleScanAll(req, res, url) {
+  const apiKey = ENV_KEY || url.searchParams.get('key');
+  if (!apiKey) {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'No API key. Start the server with LINQ_API_KEY set, or pass one in the form.' }));
+    return;
+  }
+  const from = url.searchParams.get('from')?.trim() || undefined;
+  const perChatCap = num(url.searchParams.get('cap')) ?? 300;
+
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+
+  let cancelled = false;
+  req.on('close', () => { cancelled = true; });
+
+  sse(res, 'start', { from: from ?? null, cap: perChatCap });
+  try {
+    const { scanned } = await scanAllChats({
+      client: createClient(apiKey),
+      from, perChatCap,
+      isCancelled: () => cancelled,
+      onChat: (row) => sse(res, 'chat', row),
+      onProgress: (p) => sse(res, 'progress', p),
+    });
+    if (!cancelled) sse(res, 'done', { scanned });
+  } catch (err) {
+    if (!cancelled) sse(res, 'error', { message: err?.message ?? String(err), status: err?.status ?? null });
+  }
+  res.end();
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  if (url.pathname === '/api/scan-all') return handleScanAll(req, res, url);
   if (url.pathname === '/api/scan') return handleScan(req, res, url);
 
   if (url.pathname === '/api/config') {
