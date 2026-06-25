@@ -1,0 +1,14 @@
+{
+  "name": "linq-message-audit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Uses the Linq API to list chats and flag the ones with very few messages.",
+  "scripts": {
+    "audit": "node audit.mjs",
+    "serve": "node server.mjs"
+  },
+  "dependencies": {
+    "@linqapp/sdk": "^0.24.2"
+  }
+}

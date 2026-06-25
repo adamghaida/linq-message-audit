@@ -1,0 +1,11 @@
+# dependencies
+node_modules/
+
+# scan output — may contain real contact phone numbers / emails
+results-*.txt
+*.csv
+scan.log
+
+# secrets / env
+.env
+.env.*

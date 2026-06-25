@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Linq Message Audit</title>
+<style>
+  :root {
+    --bg: #0c0f17; --panel: #141925; --panel2: #1b2233; --line: #283047;
+    --text: #e8ecf5; --muted: #8b95ad; --accent: #5b8cff; --good: #46c08a;
+    --warn: #e6b450; --bad: #ef6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 6px; }
+  input, select {
+    width: 100%; background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 9px; padding: 10px 12px; font-size: 14px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 5px; }
+  .row { display: flex; gap: 12px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 9px;
+    padding: 11px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { display: flex; gap: 18px; align-items: center; margin: 22px 0 10px; flex-wrap: wrap; min-height: 22px; }
+  .pill { font-size: 13px; color: var(--muted); }
+  .pill b { color: var(--text); }
+  .bar { height: 6px; background: var(--panel2); border-radius: 99px; overflow: hidden; flex: 1; min-width: 120px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .err { color: var(--bad); font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; position: sticky; top: 0; background: var(--panel); }
+  td.num { font-variant-numeric: tabular-nums; }
+  td.id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); }
+  .HEALTHY { color: var(--good); border-color: rgba(70,192,138,.4); }
+  .AT_RISK { color: var(--warn); border-color: rgba(230,180,80,.4); }
+  .CRITICAL, .OPTED_OUT { color: var(--bad); border-color: rgba(239,107,107,.4); }
+  .zero { color: var(--bad); font-weight: 700; }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Linq Message Audit</h1>
+  <p class="sub">Find chats with very few messages — overall or specifically from us.</p>
+
+  <div class="card">
+    <div class="grid">
+      <div id="keyWrap" style="display:none; grid-column: 1 / -1;">
+        <label>Linq API key</label>
+        <input id="key" type="password" placeholder="linq_..." autocomplete="off" />
+        <div class="hint">No key found in the server environment — paste one to scan.</div>
+      </div>
+      <div>
+        <label>Fewer than … from us</label>
+        <input id="us" type="number" min="0" placeholder="4" value="4" />
+        <div class="hint">messages where is_from_me</div>
+      </div>
+      <div>
+        <label>Fewer than … total</label>
+        <input id="total" type="number" min="0" placeholder="any" />
+        <div class="hint">leave blank to ignore</div>
+      </div>
+      <div>
+        <label>Combine</label>
+        <select id="mode">
+          <option value="all">Match all (AND)</option>
+          <option value="any">Match any (OR)</option>
+        </select>
+      </div>
+      <div>
+        <label>From line (optional)</label>
+        <input id="from" type="text" placeholder="+12025550100" />
+        <div class="hint">scope to one number</div>
+      </div>
+    </div>
+    <div class="row">
+      <button id="scan">Scan chats</button>
+      <button id="stop" class="ghost" style="display:none;">Stop</button>
+      <button id="csv" class="ghost" disabled>Download CSV</button>
+    </div>
+  </div>
+
+  <div class="status">
+    <span class="pill" id="summary"></span>
+    <div class="bar"><i id="bar"></i></div>
+    <span class="pill"><b id="scanned">0</b> scanned</span>
+    <span class="pill"><b id="count">0</b> flagged</span>
+  </div>
+  <div class="err" id="error"></div>
+
+  <table id="tbl" style="display:none;">
+    <thead><tr><th>From us</th><th>Total</th><th>Chat</th><th>ID</th><th>Health</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="empty" id="empty" style="display:none;">No matching chats.</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let es = null, rows = [];
+
+async function init() {
+  const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
+  if (!cfg.hasEnvKey) $('keyWrap').style.display = 'block';
+}
+init();
+
+function healthTag(h) {
+  if (!h) return '<span class="tag">—</span>';
+  return `<span class="tag ${h}">${h}</span>`;
+}
+
+function addRow(r) {
+  rows.push(r);
+  $('tbl').style.display = '';
+  $('empty').style.display = 'none';
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    `<td class="num ${r.us === 0 ? 'zero' : ''}">${r.us}</td>` +
+    `<td class="num">${r.total}</td>` +
+    `<td>${escapeHtml(r.name)}</td>` +
+    `<td class="id">${r.id}</td>` +
+    `<td>${healthTag(r.health)}</td>`;
+  $('rows').appendChild(tr);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+}
+
+function setScanning(on) {
+  $('scan').disabled = on;
+  $('stop').style.display = on ? '' : 'none';
+}
+
+function start() {
+  if (es) es.close();
+  rows = [];
+  $('rows').innerHTML = '';
+  $('tbl').style.display = 'none';
+  $('empty').style.display = 'none';
+  $('error').textContent = '';
+  $('scanned').textContent = '0';
+  $('count').textContent = '0';
+  $('bar').style.width = '0';
+  $('csv').disabled = true;
+
+  const p = new URLSearchParams();
+  if ($('us').value !== '') p.set('us', $('us').value);
+  if ($('total').value !== '') p.set('total', $('total').value);
+  p.set('mode', $('mode').value);
+  if ($('from').value.trim()) p.set('from', $('from').value.trim());
+  if ($('keyWrap').style.display !== 'none' && $('key').value.trim()) p.set('key', $('key').value.trim());
+
+  setScanning(true);
+  es = new EventSource('/api/scan?' + p.toString());
+
+  es.addEventListener('start', (e) => {
+    $('summary').textContent = 'Flagging: ' + JSON.parse(e.data).summary;
+  });
+  es.addEventListener('progress', (e) => {
+    const d = JSON.parse(e.data);
+    $('scanned').textContent = d.scanned;
+    $('count').textContent = d.flagged;
+    // we don't know the total chat count up front; show an indeterminate-ish creep
+    $('bar').style.width = Math.min(95, d.scanned / 8) + '%';
+  });
+  es.addEventListener('flag', (e) => addRow(JSON.parse(e.data)));
+  es.addEventListener('done', (e) => {
+    const d = JSON.parse(e.data);
+    $('bar').style.width = '100%';
+    $('summary').textContent = `Done — scanned ${d.scanned}, ${d.flagged} match [${d.summary}]`;
+    if (rows.length === 0) $('empty').style.display = 'block';
+    $('csv').disabled = rows.length === 0;
+    finish();
+  });
+  es.addEventListener('error', (e) => {
+    let msg = 'Connection lost.';
+    try { msg = JSON.parse(e.data).message; } catch {}
+    $('error').textContent = 'Error: ' + msg;
+    finish();
+  });
+}
+
+function finish() { setScanning(false); if (es) { es.close(); es = null; } }
+
+$('scan').onclick = start;
+$('stop').onclick = () => { finish(); $('summary').textContent += ' (stopped)'; };
+$('csv').onclick = () => {
+  const head = 'from_us,total,name,chat_id,health\n';
+  const body = rows.map(r =>
+    [r.us, r.total, `"${String(r.name).replace(/"/g,'""')}"`, r.id, r.health ?? ''].join(',')
+  ).join('\n');
+  const blob = new Blob([head + body], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'linq-audit.csv';
+  a.click();
+};
+</script>
+</body>
+</html>
