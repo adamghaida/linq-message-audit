@@ -4,6 +4,18 @@ import LinqAPIV3 from '@linqapp/sdk';
 export const HARD_CAP = 500; // never page more than this many messages for one chat
 export const PAGE_LIMIT = 100; // request the largest page size to cut round-trips
 export const DEFAULT_CONCURRENCY = 12; // chats counted in parallel
+export const TEXT_BUDGET = 16000; // max chars of message text kept per chat for search
+
+// Pull searchable text out of a message's parts (text values, link urls, media filenames).
+function messageText(message) {
+  const parts = message.parts ?? [];
+  const out = [];
+  for (const p of parts) {
+    if (p.type === 'text' || p.type === 'link') { if (p.value) out.push(p.value); }
+    else if (p.type === 'media' && p.filename) out.push(p.filename);
+  }
+  return out.join(' ');
+}
 
 export function createClient(apiKey) {
   return new LinqAPIV3({ apiKey });
@@ -120,20 +132,27 @@ export async function scanChats({
   return { scanned, flagged, cancelled: isCancelled?.() ?? false };
 }
 
-// Count every message in a chat (no early exit), up to `cap`.
+// Count every message in a chat (no early exit), up to `cap`, and collect a bounded
+// blob of message text for content search.
 async function countChatFull(client, chatId, cap, isCancelled) {
   let total = 0;
   let us = 0;
   let lastActivity = null; // newest message timestamp seen
+  const texts = [];
+  let textLen = 0;
   for await (const message of client.chats.messages.list(chatId, { limit: PAGE_LIMIT })) {
-    if (isCancelled?.()) return { total, us, lastActivity, capped: true };
+    if (isCancelled?.()) return { total, us, lastActivity, text: texts.join(' • '), capped: true };
     total += 1;
     if (message.is_from_me) us += 1;
     const ts = message.created_at ?? message.sent_at;
     if (ts && (!lastActivity || ts > lastActivity)) lastActivity = ts;
-    if (total >= cap) return { total, us, lastActivity, capped: true };
+    if (textLen < TEXT_BUDGET) {
+      const t = messageText(message);
+      if (t) { texts.push(t); textLen += t.length + 3; }
+    }
+    if (total >= cap) return { total, us, lastActivity, text: texts.join(' • '), capped: true };
   }
-  return { total, us, lastActivity, capped: false };
+  return { total, us, lastActivity, text: texts.join(' • '), capped: false };
 }
 
 /**
@@ -161,13 +180,14 @@ export async function scanAllChats({
   const chats = [];
   let scanned = 0;
   await pool(list, concurrency, async (chat) => {
-    const { total, us, lastActivity, capped } = await countChatFull(client, chat.id, perChatCap, isCancelled);
+    const { total, us, lastActivity, text, capped } = await countChatFull(client, chat.id, perChatCap, isCancelled);
     const row = {
       id: chat.id,
       name: describeChat(chat),
       total,
       us,
       them: total - us,
+      text,
       capped,
       health: chat.health_status?.status ?? null,
       isGroup: Boolean(chat.is_group),

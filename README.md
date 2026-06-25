@@ -34,9 +34,12 @@ the data in the browser without re-scanning:
   count, reply rate, average messages per chat.
 - **Chat health** — stacked breakdown of HEALTHY / AT_RISK / CRITICAL / OPTED_OUT.
 - **From-us distribution** — histogram bucketed by how many messages you sent (0–10+).
-- **Interactive table** — filter by `from us <`, `total <` (AND/OR), health, free-text
-  search, or "never replied"; sort any column; counts that hit the per-chat cap are
-  marked. **CSV** exports the current filtered view.
+- **Interactive table** — filter by `from us <`, `total <` (AND/OR), health, or
+  "never replied"; sort any column; counts that hit the per-chat cap are marked.
+  **CSV** exports the current filtered view.
+- **Search** across participant handles, chat IDs, **and message content** in one box.
+  Message text is captured during the scan (Linq has no search API), so content matches
+  show a highlighted snippet. Up to ~16k characters of text are kept per chat for search.
 
 The per-chat cap (default 300) bounds how deep each chat is paged so very active chats
 don't make a scan crawl; capped chats are flagged in the table.

@@ -79,6 +79,8 @@
   .CRITICAL,.OPTED_OUT{color:var(--bad);border-color:rgba(239,107,107,.4);}
   .zero{ color:var(--bad); font-weight:700; }
   .cap{ color:var(--warn); font-size:11px; } .empty{ color:var(--muted); padding:22px 0; text-align:center; }
+  .snip{ margin-top:4px; font-size:12px; color:var(--muted); max-width:420px; white-space:normal; }
+  .snip mark{ background:rgba(91,140,255,.28); color:var(--text); border-radius:3px; padding:0 2px; }
   .tablewrap{ max-height:560px; overflow:auto; border:1px solid var(--line); border-radius:12px; }
 </style>
 </head>
@@ -147,7 +149,7 @@
             <option>HEALTHY</option><option>AT_RISK</option><option>CRITICAL</option><option>OPTED_OUT</option>
           </select>
         </div>
-        <div class="field"><label>Search name / id</label><input id="fSearch" class="search" type="text" placeholder="phone, email…" /></div>
+        <div class="field"><label>Search (name, id, messages)</label><input id="fSearch" class="search" type="text" placeholder="phone, email, or a word…" /></div>
         <label class="chk"><input id="fNever" type="checkbox" /> Never replied (us = 0)</label>
         <div style="flex:1"></div>
         <span class="pill" style="padding-bottom:9px;"><b id="matchCount">0</b> shown</span>
@@ -182,6 +184,23 @@ async function init(){
 init();
 
 const esc = (s)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// precompute a lowercase haystack so search stays fast across keystrokes
+function indexChat(c){
+  c.text = c.text || '';
+  c._name = (c.name||'').toLowerCase();
+  c._id = (c.id||'').toLowerCase();
+  c._text = c.text.toLowerCase();
+}
+// snippet of message text around the query match, with the term highlighted
+function snippet(c, q){
+  const i = c._text.indexOf(q);
+  if(i < 0) return '';
+  const start = Math.max(0, i-30), end = Math.min(c.text.length, i+q.length+40);
+  const pre = (start>0?'…':'') + c.text.slice(start, i);
+  const hit = c.text.slice(i, i+q.length);
+  const post = c.text.slice(i+q.length, end) + (end<c.text.length?'…':'');
+  return `${esc(pre)}<mark>${esc(hit)}</mark>${esc(post)}`;
+}
 const fmtNum = (n)=>n.toLocaleString();
 function fmtDate(s){ if(!s) return '—'; const d=new Date(s); if(isNaN(d)) return '—';
   return d.toISOString().slice(0,10); }
@@ -202,7 +221,7 @@ function start(){
 
   es=new EventSource('/api/scan-all?'+p.toString());
   es.addEventListener('total',(e)=>{ totalChats=JSON.parse(e.data).total; $('phase').textContent=`Scanning ${totalChats} chats…`; });
-  es.addEventListener('chat',(e)=>{ chats.push(JSON.parse(e.data)); scheduleRender(); });
+  es.addEventListener('chat',(e)=>{ const c=JSON.parse(e.data); indexChat(c); chats.push(c); scheduleRender(); });
   es.addEventListener('progress',(e)=>{
     const d=JSON.parse(e.data);
     const pct = d.total ? Math.round(d.scanned/d.total*100) : 0;
@@ -281,7 +300,7 @@ function filtered(){
   let rows=chats.filter(c=>{
     if(never && c.us!==0) return false;
     if(fH && (c.health??'')!==fH) return false;
-    if(q && !(c.name.toLowerCase().includes(q) || c.id.includes(q))) return false;
+    if(q && !(c._name.includes(q) || c._id.includes(q) || c._text.includes(q))) return false;
     const usOk = fUs==null? null : c.us<fUs;
     const tOk  = fTotal==null? null : c.total<fTotal;
     const active=[usOk,tOk].filter(x=>x!==null);
@@ -300,15 +319,20 @@ function filtered(){
 function tag(h){ return h? `<span class="tag ${h}">${h}</span>` : '<span class="tag">—</span>'; }
 function renderTable(){
   const rows=filtered();
+  const q=$('fSearch').value.trim().toLowerCase();
   $('matchCount').textContent=fmtNum(rows.length);
   $('csv').disabled=rows.length===0;
   $('empty').style.display=rows.length?'none':'';
-  $('rows').innerHTML=rows.slice(0,1000).map(c=>
-    `<tr><td class="num ${c.us===0?'zero':''}">${c.us}</td>`+
+  $('rows').innerHTML=rows.slice(0,1000).map(c=>{
+    // show a message snippet only when the match is in the content, not the handle/id
+    const snip = (q && !c._name.includes(q) && !c._id.includes(q)) ? snippet(c,q) : '';
+    return `<tr><td class="num ${c.us===0?'zero':''}">${c.us}</td>`+
     `<td class="num" style="color:var(--them)">${c.them}</td>`+
     `<td class="num">${c.total}${c.capped?' <span class="cap">cap</span>':''}</td>`+
-    `<td class="name">${esc(c.name)}<br><span class="id">${c.id}</span></td>`+
-    `<td>${tag(c.health)}</td><td class="num">${fmtDate(c.lastActivity)}</td></tr>`).join('');
+    `<td class="name">${esc(c.name)}<br><span class="id">${c.id}</span>`+
+    `${snip?`<div class="snip">${snip}</div>`:''}</td>`+
+    `<td>${tag(c.health)}</td><td class="num">${fmtDate(c.lastActivity)}</td></tr>`;
+  }).join('');
   document.querySelectorAll('th').forEach(th=>{
     th.classList.toggle('sorted', th.dataset.k===sortKey);
     th.classList.toggle('asc', th.dataset.k===sortKey && sortDir===1);
